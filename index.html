@@ -300,10 +300,15 @@
           "auth/too-many-requests": "Trop d'essais. Réessaie plus tard.",
           "auth/network-request-failed": "Connexion à Firebase impossible. Vérifie Internet et réessaie.",
           "auth/unauthorized-domain": "Ajoute le domaine GitHub Pages dans Authentication → Settings → Authorized domains.",
-          "auth/operation-not-allowed": "Active le fournisseur E-mail/Mot de passe dans Firebase Authentication."
+          "auth/operation-not-allowed": "Active le fournisseur E-mail/Mot de passe dans Firebase Authentication.",
+          "auth/configuration-not-found": "Vérifie que le fournisseur E-mail/Mot de passe est activé dans Firebase Authentication.",
+          "auth/invalid-api-key": "La configuration Firebase du site est incorrecte. Vérifie la clé API de l'application Web.",
+          "auth/api-key-not-valid": "La clé API Firebase est invalide. Vérifie la configuration de l'application Web.",
+          "auth/app-not-authorized": "Vérifie que la clé API Firebase autorise le domaine GitHub Pages de ce site."
         };
+        console.error("Firebase Authentication:", error);
         document.getElementById("login-error").textContent =
-          messages[error.code] || "Connexion impossible. Vérifie les informations du compte Firebase.";
+          messages[error.code] || `Connexion impossible (${error.code || "erreur inconnue"}). Vérifie les informations du compte Firebase.`;
         document.getElementById("login-error").hidden = false;
       }
 
