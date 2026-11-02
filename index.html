@@ -203,6 +203,10 @@
           window.location.assign("/login");
           throw new Error("Votre session a expiré.");
         }
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+          throw new Error("Le serveur du site ne répond pas. Lance « npm start » dans le dossier du projet, puis ouvre http://localhost:3000 (pas Live Server ni GitHub Pages).");
+        }
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Une erreur est survenue.");
         return result;
@@ -406,5 +410,4 @@
   </script>
 </body>
 </html>
-
 

@@ -12,6 +12,8 @@ npm start
 
 Ouvre ensuite <http://localhost:3000>. Aucun paquet externe n'est nécessaire.
 
+N'ouvre pas `index.html` directement et n'utilise pas Live Server ou GitHub Pages : ces options servent uniquement des fichiers statiques et ne peuvent pas enregistrer les tâches. Si le site indique que son serveur ne répond pas, laisse `npm start` tourner dans le terminal et ouvre <http://localhost:3000>.
+
 ## Comptes
 
 - **Paul** — mot de passe `admin`
