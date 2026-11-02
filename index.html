@@ -86,6 +86,17 @@
     .toast { position: fixed; right: 20px; bottom: 20px; z-index: 3; max-width: min(360px, calc(100vw - 40px)); border-radius: 10px; background: #263b29; color: #fff; padding: 12px 15px; box-shadow: 0 8px 25px #18231d33; font-size: 12px; }
     .toast[hidden] { display: none; }
     .loading { padding: 28px; color: var(--muted); text-align: center; font-size: 13px; }
+    [hidden] { display: none !important; }
+    .login-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    .login-card { width: min(100%, 410px); border: 1px solid var(--line); border-radius: 18px; background: var(--card); padding: 30px; box-shadow: 0 18px 55px #263b2910; }
+    .login-card h1 { margin-top: 20px; font-size: 28px; }
+    .login-card > p { margin: 9px 0 20px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .login-card label { display: block; margin: 14px 0 6px; font-size: 12px; font-weight: 700; }
+    .login-card .field { font-size: 13px; }
+    .login-card .primary { width: 100%; min-height: 42px; margin-top: 20px; }
+    .login-warning { margin-top: 18px; border-radius: 9px; background: #edf2e2; color: #405437; padding: 11px 12px; font-size: 11px; line-height: 1.55; }
+    .login-error { margin-top: 14px; border-radius: 8px; background: #fff0ed; color: #9b4134; padding: 10px 12px; font-size: 12px; }
+    .login-error[hidden] { display: none; }
     @media (max-width: 760px) {
       .columns { grid-template-columns: 1fr; }
       .welcome { align-items: flex-start; flex-direction: column; }
@@ -110,6 +121,24 @@
   </style>
 </head>
 <body>
+  <section class="login-screen" id="login-screen">
+    <div class="login-card">
+      <div class="brand-mark" aria-hidden="true">🌾</div>
+      <div class="eyebrow" style="margin-top: 22px">Farming Simulator 18</div>
+      <h1>Bienvenue à la ferme.</h1>
+      <p>Connecte-toi avec l'adresse e-mail et le mot de passe de ton compte Firebase.</p>
+      <form id="login-form">
+        <label for="login-email">Adresse e-mail</label>
+        <input class="field" id="login-email" name="email" type="email" autocomplete="username" maxlength="254" required>
+        <label for="login-password">Mot de passe</label>
+        <input class="field" id="login-password" name="password" type="password" autocomplete="current-password" maxlength="200" required>
+        <div class="login-error" id="login-error" role="alert" hidden></div>
+        <button class="primary" type="submit">Entrer dans la ferme</button>
+      </form>
+      <div class="login-warning">Les tâches et les notes sont synchronisées en direct entre les deux comptes autorisés.</div>
+    </div>
+  </section>
+  <div id="dashboard" hidden>
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
@@ -121,7 +150,7 @@
       </div>
       <div class="account">
         <span class="account-name" id="account-name">Connecté</span>
-        <form action="/logout" method="post"><button class="logout" type="submit">Se déconnecter</button></form>
+        <button class="logout" id="logout" type="button">Se déconnecter</button>
       </div>
     </div>
   </header>
@@ -130,7 +159,7 @@
       <div>
         <div class="eyebrow">Le tableau de bord de la ferme</div>
         <h1>On s'organise, les fermiers.</h1>
-        <p>Les tâches et les notes sont partagées entre vous deux.</p>
+        <p>Retrouvez ici les tâches et les notes de la ferme sur cet appareil.</p>
       </div>
       <div class="date-pill" id="today"></div>
     </section>
@@ -178,13 +207,34 @@
     </section>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  </div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
   <script>
     (() => {
       const state = { tasks: [], notes: [], filter: "all", search: "" };
+      const allowedUsers = {
+        BCizgnBvCGfFIoiOFeZBhCSE6Xm2: "Paul",
+        W47n1dRP31NvfhguKrW6JjyJCM13: "Noé"
+      };
+      const firebaseConfig = {
+        apiKey: "AIzaSyALniCHRDGkLg1iBoSzPhjd873R1tlxE50",
+        authDomain: "fs18-ac4db.firebaseapp.com",
+        databaseURL: "https://fs18-ac4db-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "fs18-ac4db",
+        storageBucket: "fs18-ac4db.firebasestorage.app",
+        messagingSenderId: "360843612557",
+        appId: "1:360843612557:web:434fe9f309cee4388dadc4"
+      };
       const taskList = document.getElementById("task-list");
       const notesList = document.getElementById("notes-list");
       let toastTimer;
+      let currentUser = "";
+      let tasksRef;
+      let notesRef;
+      let auth;
 
       function showToast(message) {
         const toast = document.getElementById("toast");
@@ -194,22 +244,67 @@
         toastTimer = setTimeout(() => { toast.hidden = true; }, 2800);
       }
 
-      async function request(url, options = {}) {
-        const response = await fetch(url, {
-          ...options,
-          headers: { "Content-Type": "application/json", ...options.headers }
-        });
-        if (response.status === 401) {
-          window.location.assign("/login");
-          throw new Error("Votre session a expiré.");
+      function startSession(user) {
+        currentUser = allowedUsers[user.uid];
+        tasksRef = firebase.database().ref("farms/fs18/tasks");
+        notesRef = firebase.database().ref("farms/fs18/notes");
+        document.getElementById("login-screen").hidden = true;
+        document.getElementById("dashboard").hidden = false;
+        document.getElementById("account-name").textContent = `Connecté en tant que ${currentUser}`;
+        taskList.innerHTML = '<div class="loading">Chargement des tâches…</div>';
+        notesList.innerHTML = '<div class="loading">Chargement des notes…</div>';
+        tasksRef.on("value", snapshot => {
+          const value = snapshot.val() || {};
+          state.tasks = Object.entries(value).map(([id, task]) => ({ ...task, id }));
+          state.tasks.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+          updateStats();
+          renderTasks();
+        }, handleDatabaseError);
+        notesRef.on("value", snapshot => {
+          const value = snapshot.val() || {};
+          state.notes = Object.entries(value).map(([id, note]) => ({ ...note, id }));
+          state.notes.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+          updateStats();
+          renderNotes();
+        }, handleDatabaseError);
+      }
+
+      function stopSession() {
+        currentUser = "";
+        if (tasksRef) tasksRef.off();
+        if (notesRef) notesRef.off();
+        tasksRef = null;
+        notesRef = null;
+        state.tasks = [];
+        state.notes = [];
+        document.getElementById("dashboard").hidden = true;
+        document.getElementById("login-screen").hidden = false;
+        document.getElementById("login-password").value = "";
+        document.getElementById("login-email").focus();
+      }
+
+      function handleDatabaseError(error) {
+        console.error("Firebase Realtime Database:", error);
+        if (error.code === "PERMISSION_DENIED") {
+          showToast("Accès refusé par Firebase. Vérifie que les règles contiennent vos deux UID et que tu utilises le bon compte.");
+          return;
         }
-        const contentType = response.headers.get("content-type") || "";
-        if (!contentType.includes("application/json")) {
-          throw new Error("Le serveur du site ne répond pas. Lance « npm start » dans le dossier du projet, puis ouvre http://localhost:3000 (pas Live Server ni GitHub Pages).");
-        }
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "Une erreur est survenue.");
-        return result;
+        showToast("Impossible de synchroniser les données Firebase. Vérifie ta connexion Internet et les règles de la base.");
+      }
+
+      function showLoginError(error) {
+        const messages = {
+          "auth/invalid-email": "Cette adresse e-mail n'est pas valide.",
+          "auth/invalid-credential": "Adresse e-mail ou mot de passe incorrect.",
+          "auth/user-disabled": "Ce compte Firebase est désactivé.",
+          "auth/too-many-requests": "Trop d'essais. Réessaie plus tard.",
+          "auth/network-request-failed": "Connexion à Firebase impossible. Vérifie Internet et réessaie.",
+          "auth/unauthorized-domain": "Ajoute le domaine GitHub Pages dans Authentication → Settings → Authorized domains.",
+          "auth/operation-not-allowed": "Active le fournisseur E-mail/Mot de passe dans Firebase Authentication."
+        };
+        document.getElementById("login-error").textContent =
+          messages[error.code] || "Connexion impossible. Vérifie les informations du compte Firebase.";
+        document.getElementById("login-error").hidden = false;
       }
 
       function updateStats() {
@@ -248,16 +343,12 @@
           checkbox.addEventListener("change", async () => {
             checkbox.disabled = true;
             try {
-              const result = await request(`/api/tasks/${encodeURIComponent(task.id)}`, {
-                method: "PATCH",
-                body: JSON.stringify({ done: checkbox.checked })
-              });
-              Object.assign(task, result.task);
-              updateStats();
-              renderTasks();
+              await tasksRef.child(task.id).update({ done: checkbox.checked });
             } catch (error) {
               checkbox.checked = task.done;
-              showToast(error.message);
+              handleDatabaseError(error);
+            } finally {
+              checkbox.disabled = false;
             }
           });
           const content = document.createElement("div");
@@ -278,13 +369,14 @@
           remove.textContent = "×";
           remove.setAttribute("aria-label", `Supprimer la tâche ${task.title}`);
           remove.addEventListener("click", async () => {
+            remove.disabled = true;
             try {
-              await request(`/api/tasks/${encodeURIComponent(task.id)}`, { method: "DELETE" });
-              state.tasks = state.tasks.filter(item => item.id !== task.id);
-              updateStats();
-              renderTasks();
+              await tasksRef.child(task.id).remove();
               showToast("Tâche supprimée.");
-            } catch (error) { showToast(error.message); }
+            } catch (error) {
+              remove.disabled = false;
+              handleDatabaseError(error);
+            }
           });
           row.append(checkbox, content, remove);
           taskList.append(row);
@@ -319,39 +411,70 @@
           remove.textContent = "×";
           remove.setAttribute("aria-label", `Supprimer la note ${note.title}`);
           remove.addEventListener("click", async () => {
+            remove.disabled = true;
             try {
-              await request(`/api/notes/${encodeURIComponent(note.id)}`, { method: "DELETE" });
-              state.notes = state.notes.filter(item => item.id !== note.id);
-              renderNotes();
-              updateStats();
+              await notesRef.child(note.id).remove();
               showToast("Note supprimée.");
-            } catch (error) { showToast(error.message); }
+            } catch (error) {
+              remove.disabled = false;
+              handleDatabaseError(error);
+            }
           });
           card.append(title, content, meta, remove);
           notesList.append(card);
         }
       }
 
+      document.getElementById("login-form").addEventListener("submit", event => {
+        event.preventDefault();
+        const email = document.getElementById("login-email").value.trim();
+        const password = document.getElementById("login-password").value;
+        const error = document.getElementById("login-error");
+        const button = event.currentTarget.querySelector("button");
+        button.disabled = true;
+        error.hidden = true;
+        auth.signInWithEmailAndPassword(email, password)
+          .catch(showLoginError)
+          .finally(() => { button.disabled = false; });
+      });
+
+      document.getElementById("logout").addEventListener("click", () => {
+        auth.signOut().catch(error => {
+          console.error("Firebase Authentication:", error);
+          showToast("Impossible de fermer la session. Réessaie.");
+        });
+      });
+
       document.getElementById("task-form").addEventListener("submit", async event => {
         event.preventDefault();
         const form = event.currentTarget;
         const title = document.getElementById("task-title-input");
         const detail = document.getElementById("task-detail-input");
+        const taskTitle = title.value.trim();
+        if (!taskTitle) {
+          showToast("Saisis un nom pour la tâche.");
+          title.focus();
+          return;
+        }
+        const task = {
+          title: taskTitle,
+          detail: detail.value.trim(),
+          done: false,
+          createdAt: new Date().toISOString(),
+          createdBy: currentUser
+        };
         const button = form.querySelector("button");
         button.disabled = true;
         try {
-          const result = await request("/api/tasks", {
-            method: "POST",
-            body: JSON.stringify({ title: title.value, detail: detail.value })
-          });
-          state.tasks.unshift(result.task);
+          await tasksRef.push().set(task);
           form.reset();
-          updateStats();
-          renderTasks();
           title.focus();
           showToast("Tâche ajoutée à la liste.");
-        } catch (error) { showToast(error.message); }
-        finally { button.disabled = false; }
+        } catch (error) {
+          handleDatabaseError(error);
+        } finally {
+          button.disabled = false;
+        }
       });
 
       document.getElementById("note-form").addEventListener("submit", async event => {
@@ -359,21 +482,30 @@
         const form = event.currentTarget;
         const title = document.getElementById("note-title-input");
         const content = document.getElementById("note-content-input");
+        const noteTitle = title.value.trim();
+        const noteContent = content.value.trim();
+        if (!noteTitle || !noteContent) {
+          showToast("Saisis un titre et un contenu pour la note.");
+          return;
+        }
+        const note = {
+          title: noteTitle,
+          content: noteContent,
+          createdAt: new Date().toISOString(),
+          createdBy: currentUser
+        };
         const button = form.querySelector("button");
         button.disabled = true;
         try {
-          const result = await request("/api/notes", {
-            method: "POST",
-            body: JSON.stringify({ title: title.value, content: content.value })
-          });
-          state.notes.unshift(result.note);
+          await notesRef.push().set(note);
           form.reset();
-          updateStats();
-          renderNotes();
           title.focus();
           showToast("Note enregistrée.");
-        } catch (error) { showToast(error.message); }
-        finally { button.disabled = false; }
+        } catch (error) {
+          handleDatabaseError(error);
+        } finally {
+          button.disabled = false;
+        }
       });
 
       document.querySelectorAll("[data-filter]").forEach(button => {
@@ -394,20 +526,25 @@
         weekday: "long", day: "numeric", month: "long", year: "numeric"
       });
 
-      Promise.all([request("/api/state"), request("/api/me")])
-        .then(([data, user]) => {
-          state.tasks = data.tasks;
-          state.notes = data.notes;
-          document.getElementById("account-name").textContent = `Connecté en tant que ${user.username}`;
-          updateStats();
-          renderTasks();
-          renderNotes();
-        })
-        .catch(error => {
-          if (error.message !== "Votre session a expiré.") showToast(error.message);
-        });
+      if (!window.firebase) {
+        showLoginError({ code: "auth/network-request-failed" });
+        return;
+      }
+      firebase.initializeApp(firebaseConfig);
+      auth = firebase.auth();
+      firebase.auth().onAuthStateChanged(user => {
+        if (!user) {
+          stopSession();
+          return;
+        }
+        if (!Object.hasOwn(allowedUsers, user.uid)) {
+          auth.signOut().catch(error => console.error("Firebase Authentication:", error));
+          showLoginError({ code: "auth/invalid-credential" });
+          return;
+        }
+        startSession(user);
+      });
     })();
   </script>
 </body>
 </html>
-

@@ -1,28 +1,27 @@
 # FS-18-
 
-Petit espace privé pour organiser une survie Farming Simulator 18 à deux.
+Carnet de tâches et de notes pour une survie Farming Simulator 18 à deux.
 
-## Lancer le site
+## Publier sur GitHub Pages
 
-Installe Node.js 18 ou une version plus récente, puis lance depuis ce dossier :
+Ce site fonctionne comme un site statique : il n'a pas besoin de Node.js, de `npm start` ni d'un serveur. Dans les paramètres GitHub du dépôt, active **Pages** avec la branche et le dossier qui contiennent `index.html`. Après avoir envoyé les dernières modifications sur GitHub, ouvre l'adresse GitHub Pages du dépôt.
 
-```sh
-npm start
-```
+## Comptes Firebase
 
-Ouvre ensuite <http://localhost:3000>. Aucun paquet externe n'est nécessaire.
+- La connexion utilise l'adresse e-mail et le mot de passe Firebase de chaque utilisateur.
+- Paul et Noé sont reconnus par leurs UID Firebase, et seuls ces deux UID sont acceptés par le site.
+- Aucun formulaire d'inscription n'est proposé : crée les comptes dans Firebase Authentication.
 
-N'ouvre pas `index.html` directement et n'utilise pas Live Server ou GitHub Pages : ces options servent uniquement des fichiers statiques et ne peuvent pas enregistrer les tâches. Si le site indique que son serveur ne répond pas, laisse `npm start` tourner dans le terminal et ouvre <http://localhost:3000>.
+## Configurer Firebase
 
-## Comptes
+L'application Web Firebase et sa Realtime Database sont configurées dans `index.html`. Le SDK Firebase est chargé depuis le CDN officiel, ce qui permet de publier le site statique sur GitHub Pages sans serveur ni npm.
 
-- **Paul** — mot de passe `admin`
-- **Noé** — mot de passe `Noé43`
+Dans la console Firebase :
 
-Le serveur protège la page et toutes les routes de données avec une session HTTP. Les mots de passe ne sont pas envoyés au navigateur : seuls leurs vérificateurs PBKDF2 sont conservés dans `server.js`. Les tentatives de connexion sont limitées.
+1. Active **E-mail/Mot de passe** dans **Authentication → Sign-in method** et crée les deux utilisateurs.
+2. Dans **Authentication → Settings → Authorized domains**, ajoute le domaine GitHub Pages du site si nécessaire (`<pseudo>.github.io`).
+3. Dans **Realtime Database → Rules**, autorise uniquement les deux UID des comptes Paul et Noé sous `farms/fs18`. N'active pas le mode test et ne publie pas de règles permettant l'accès public.
 
-## Utilisation
+Les tâches et les notes sont enregistrées sous `farms/fs18` et se synchronisent en direct entre les appareils connectés. L'adresse e-mail et le mot de passe sont gérés par Firebase Authentication ; ne publie jamais de clé privée de compte de service.
 
-Les deux comptes partagent les tâches et les notes. Les données sont enregistrées dans `data.json` à côté du serveur et restent disponibles après son redémarrage sur la même machine. Ce fichier est ignoré par Git pour ne pas publier le contenu du carnet ; sauvegarde-le pour conserver une copie.
-
-Pour rendre le site accessible sur Internet, héberge le serveur Node.js derrière HTTPS, configure un disque persistant pour `data.json` et réserve l'accès à des personnes de confiance. Le compte Paul utilise le mot de passe demandé `admin`, qui est trop facile à deviner pour un service exposé publiquement ; ne déploie pas ces identifiants tels quels sur Internet.
+Pour mettre en ligne les changements, envoie `index.html` sur GitHub et recharge le site Pages. Les anciennes tâches conservées dans le stockage local d'un navigateur ne sont pas importées automatiquement dans la base.
