@@ -1,0 +1,12 @@
+{
+  "name": "fs18-carnet-de-ferme",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Espace privé de tâches et de notes pour une survie Farming Simulator 18",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
