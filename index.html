@@ -93,6 +93,9 @@
     .chat-message-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; color: var(--muted); font-size: 10px; }
     .chat-message-author { color: var(--green-dark); font-weight: 750; }
     .chat-message-text { overflow-wrap: anywhere; white-space: pre-wrap; font-size: 12px; line-height: 1.5; }
+    .chat-delete { margin-left: auto; border: 0; background: transparent; color: #9da196; padding: 0 2px; font-size: 14px; line-height: 1; }
+    .chat-delete:hover { color: #b34d3e; }
+    .chat-delete:disabled { cursor: wait; opacity: .5; }
     .chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 0 20px 18px; }
     .chat-form .primary { min-height: 38px; }
     .toast { position: fixed; right: 20px; bottom: 20px; z-index: 3; max-width: min(360px, calc(100vw - 40px)); border-radius: 10px; background: #263b29; color: #fff; padding: 12px 15px; box-shadow: 0 8px 25px #18231d33; font-size: 12px; }
@@ -526,6 +529,26 @@
             time.textContent = date.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
           }
           meta.append(author, time);
+          if (message.uid === auth.currentUser.uid) {
+            const remove = document.createElement("button");
+            remove.className = "chat-delete";
+            remove.type = "button";
+            remove.textContent = "×";
+            remove.setAttribute("aria-label", "Supprimer mon message");
+            remove.title = "Supprimer ce message";
+            remove.addEventListener("click", async () => {
+              if (!window.confirm("Supprimer définitivement ce message ?")) return;
+              remove.disabled = true;
+              try {
+                await chatRef.child(message.id).remove();
+                showToast("Message supprimé.");
+              } catch (error) {
+                remove.disabled = false;
+                handleDatabaseError(error);
+              }
+            });
+            meta.append(remove);
+          }
           const text = document.createElement("div");
           text.className = "chat-message-text";
           text.textContent = message.text;
