@@ -305,7 +305,7 @@
       function handleDatabaseError(error) {
         console.error("Firebase Realtime Database:", error);
         if (error.code === "PERMISSION_DENIED") {
-          showToast("Accès refusé par Firebase. Vérifie que les règles contiennent vos deux UID et que tu utilises le bon compte.");
+          showToast("Firebase refuse l’accès. Remplace toutes les règles de la base par le bloc complet du README, puis clique sur Publier.");
           return;
         }
         showToast("Impossible de synchroniser les données Firebase. Vérifie ta connexion Internet et les règles de la base.");

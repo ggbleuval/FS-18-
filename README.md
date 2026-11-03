@@ -20,7 +20,7 @@ Dans la console Firebase :
 
 1. Active **E-mail/Mot de passe** dans **Authentication → Sign-in method** et crée les deux utilisateurs.
 2. Dans **Authentication → Settings → Authorized domains**, ajoute le domaine GitHub Pages du site si nécessaire (`<pseudo>.github.io`).
-3. Dans **Realtime Database → Rules**, remplace les anciennes règles par les règles complètes ci-dessous, puis clique sur **Publier**. Les notes personnelles sont stockées dans une branche distincte pour qu'un ancien accès partagé sous `farms/fs18` ne les expose pas.
+3. Dans **Realtime Database → Rules**, remplace **toutes** les règles actuelles par le bloc complet ci-dessous, puis clique sur **Publier**. N'ajoute pas seulement le bloc `privateNotes` aux anciennes règles : un accès au niveau parent pourrait accorder l'accès aux enfants et annuler la confidentialité attendue.
 
 Les tâches et les notes partagées sont enregistrées sous `farms/fs18/tasks` et `farms/fs18/notes`. Dans le panneau « Les notes », ouvre l'onglet **Publiques** ou **Personnelles** pour afficher uniquement les notes de ce compartiment. L'ajout d'une note l'enregistre dans le compartiment sélectionné. Les notes personnelles de chaque compte sont isolées sous `privateNotes/<UID>`. L'adresse e-mail et le mot de passe sont gérés par Firebase Authentication ; ne publie jamais de clé privée de compte de service.
 
@@ -31,8 +31,14 @@ Les tâches et les notes partagées sont enregistrées sous `farms/fs18/tasks` e
     ".write": false,
     "farms": {
       "fs18": {
-        ".read": "auth != null && (auth.uid === 'BCizgnBvCGfFIoiOFeZBhCSE6Xm2' || auth.uid === 'W47n1dRP31NvfhguKrW6JjyJCM13')",
-        ".write": "auth != null && (auth.uid === 'BCizgnBvCGfFIoiOFeZBhCSE6Xm2' || auth.uid === 'W47n1dRP31NvfhguKrW6JjyJCM13')"
+        "tasks": {
+          ".read": "auth != null && (auth.uid === 'BCizgnBvCGfFIoiOFeZBhCSE6Xm2' || auth.uid === 'W47n1dRP31NvfhguKrW6JjyJCM13')",
+          ".write": "auth != null && (auth.uid === 'BCizgnBvCGfFIoiOFeZBhCSE6Xm2' || auth.uid === 'W47n1dRP31NvfhguKrW6JjyJCM13')"
+        },
+        "notes": {
+          ".read": "auth != null && (auth.uid === 'BCizgnBvCGfFIoiOFeZBhCSE6Xm2' || auth.uid === 'W47n1dRP31NvfhguKrW6JjyJCM13')",
+          ".write": "auth != null && (auth.uid === 'BCizgnBvCGfFIoiOFeZBhCSE6Xm2' || auth.uid === 'W47n1dRP31NvfhguKrW6JjyJCM13')"
+        }
       }
     },
     "privateNotes": {
