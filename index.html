@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#17251b">
-  <title>Gestion Ferme - FS-18</title>
+  <title>Notre ferme — FS 18</title>
   <style>
     :root {
       color-scheme: light;
@@ -77,6 +77,9 @@
     .notes-form .field + .field { margin-top: 8px; }
     .notes-form textarea { min-height: 80px; resize: vertical; }
     .notes-form .primary { min-height: 36px; margin-top: 8px; }
+    .note-tabs { display: flex; gap: 7px; padding: 0 20px 14px; }
+    .note-tab { border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--muted); padding: 8px 13px; font-size: 11px; font-weight: 700; }
+    .note-tab[aria-selected="true"] { border-color: var(--green); background: #edf2e2; color: var(--green-dark); }
     .notes-list { padding: 0 13px 13px; }
     .note-card { position: relative; margin-top: 9px; border: 1px solid #eeece2; border-radius: 11px; background: #fffefa; padding: 12px 34px 12px 13px; }
     .note-title { font-size: 12px; font-weight: 750; overflow-wrap: anywhere; }
@@ -159,7 +162,7 @@
       <div>
         <div class="eyebrow">Le tableau de bord de la ferme</div>
         <h1>On s'organise, les fermiers.</h1>
-        <p>Retrouvez ici les tâches et les notes de la ferme sur cet appareil.</p>
+        <p>Les tâches et les notes sont synchronisées entre vos comptes.</p>
       </div>
       <div class="date-pill" id="today"></div>
     </section>
@@ -167,7 +170,7 @@
     <section class="stats" aria-label="Résumé de la ferme">
       <div class="stat"><div class="stat-icon" aria-hidden="true">🚜</div><div><div class="stat-value" id="remaining-stat">—</div><div class="stat-label">Tâches à faire</div></div></div>
       <div class="stat"><div class="stat-icon" aria-hidden="true">✅</div><div><div class="stat-value" id="done-stat">—</div><div class="stat-label">Tâches terminées</div></div></div>
-      <div class="stat"><div class="stat-icon" aria-hidden="true">📝</div><div><div class="stat-value" id="notes-stat">—</div><div class="stat-label">Notes de la ferme</div></div></div>
+      <div class="stat"><div class="stat-icon" aria-hidden="true">📝</div><div><div class="stat-value" id="notes-stat">—</div><div class="stat-label">Mes notes</div></div></div>
     </section>
 
     <section class="columns">
@@ -194,15 +197,19 @@
 
       <article class="panel">
         <div class="panel-head">
-          <div><h2 class="panel-title">Le carnet</h2><p class="panel-caption">Gardez les infos utiles sous la main.</p></div>
+          <div><h2 class="panel-title">Les notes</h2><p class="panel-caption">Les notes publiques et personnelles sont rangées séparément.</p></div>
           <span class="count" id="note-count">0</span>
+        </div>
+        <div class="note-tabs" role="tablist" aria-label="Compartiments des notes">
+          <button class="note-tab" id="shared-notes-tab" type="button" role="tab" aria-selected="true" aria-controls="notes-list" data-note-compartment="shared">Publiques <span id="shared-note-count">0</span></button>
+          <button class="note-tab" id="personal-notes-tab" type="button" role="tab" aria-selected="false" aria-controls="notes-list" data-note-compartment="personal">Personnelles <span id="personal-note-count">0</span></button>
         </div>
         <form class="notes-form" id="note-form">
           <input class="field" id="note-title-input" name="title" maxlength="80" placeholder="Titre de la note" aria-label="Titre de la note" required>
           <textarea class="field" id="note-content-input" name="content" maxlength="2000" placeholder="Une idée, un prix, une chose à ne pas oublier…" aria-label="Contenu de la note" required></textarea>
-          <button class="primary" type="submit">Enregistrer la note</button>
+          <button class="primary" id="save-note-button" type="submit">Ajouter une note publique</button>
         </form>
-        <div class="notes-list" id="notes-list"><div class="empty">Chargement des notes…</div></div>
+        <div class="notes-list" id="notes-list" role="tabpanel" aria-labelledby="shared-notes-tab"><div class="empty">Chargement des notes publiques…</div></div>
       </article>
     </section>
   </main>
@@ -214,7 +221,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
   <script>
     (() => {
-      const state = { tasks: [], notes: [], filter: "all", search: "" };
+      const state = { tasks: [], notes: [], personalNotes: [], noteCompartment: "shared", filter: "all", search: "" };
       const allowedUsers = {
         BCizgnBvCGfFIoiOFeZBhCSE6Xm2: "Noé",
         W47n1dRP31NvfhguKrW6JjyJCM13: "Paul"
@@ -234,6 +241,7 @@
       let currentUser = "";
       let tasksRef;
       let notesRef;
+      let personalNotesRef;
       let auth;
 
       function showToast(message) {
@@ -248,11 +256,12 @@
         currentUser = allowedUsers[user.uid];
         tasksRef = firebase.database().ref("farms/fs18/tasks");
         notesRef = firebase.database().ref("farms/fs18/notes");
+        personalNotesRef = firebase.database().ref(`privateNotes/${user.uid}`);
         document.getElementById("login-screen").hidden = true;
         document.getElementById("dashboard").hidden = false;
         document.getElementById("account-name").textContent = `Connecté en tant que ${currentUser}`;
         taskList.innerHTML = '<div class="loading">Chargement des tâches…</div>';
-        notesList.innerHTML = '<div class="loading">Chargement des notes…</div>';
+        renderNotes();
         tasksRef.on("value", snapshot => {
           const value = snapshot.val() || {};
           state.tasks = Object.entries(value).map(([id, task]) => ({ ...task, id }));
@@ -267,16 +276,26 @@
           updateStats();
           renderNotes();
         }, handleDatabaseError);
+        personalNotesRef.on("value", snapshot => {
+          const value = snapshot.val() || {};
+          state.personalNotes = Object.entries(value).map(([id, note]) => ({ ...note, id }));
+          state.personalNotes.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+          updateStats();
+          renderNotes();
+        }, handleDatabaseError);
       }
 
       function stopSession() {
         currentUser = "";
         if (tasksRef) tasksRef.off();
         if (notesRef) notesRef.off();
+        if (personalNotesRef) personalNotesRef.off();
         tasksRef = null;
         notesRef = null;
+        personalNotesRef = null;
         state.tasks = [];
         state.notes = [];
+        state.personalNotes = [];
         document.getElementById("dashboard").hidden = true;
         document.getElementById("login-screen").hidden = false;
         document.getElementById("login-password").value = "";
@@ -315,11 +334,15 @@
       function updateStats() {
         const remaining = state.tasks.filter(task => !task.done).length;
         const done = state.tasks.length - remaining;
+        const sharedNoteCount = state.notes.length;
+        const personalNoteCount = state.personalNotes.length;
         document.getElementById("remaining-stat").textContent = remaining;
         document.getElementById("done-stat").textContent = done;
-        document.getElementById("notes-stat").textContent = state.notes.length;
+        document.getElementById("notes-stat").textContent = sharedNoteCount + personalNoteCount;
         document.getElementById("task-count").textContent = state.tasks.length;
-        document.getElementById("note-count").textContent = state.notes.length;
+        document.getElementById("shared-note-count").textContent = sharedNoteCount;
+        document.getElementById("personal-note-count").textContent = personalNoteCount;
+        document.getElementById("note-count").textContent = state.noteCompartment === "shared" ? sharedNoteCount : personalNoteCount;
       }
 
       function renderTasks() {
@@ -390,14 +413,20 @@
 
       function renderNotes() {
         notesList.replaceChildren();
-        if (!state.notes.length) {
+        const isPersonal = state.noteCompartment === "personal";
+        const visibleNotes = (isPersonal ? state.personalNotes : state.notes)
+          .map(note => ({ ...note, visibility: state.noteCompartment }))
+          .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+        if (!visibleNotes.length) {
           const empty = document.createElement("div");
           empty.className = "empty";
-          empty.textContent = "Le carnet est vide pour le moment.";
+          empty.textContent = isPersonal
+            ? "Aucune note personnelle. Ajoute une note dans ce compartiment."
+            : "Aucune note publique. Ajoutez une note dans ce compartiment.";
           notesList.append(empty);
           return;
         }
-        for (const note of state.notes) {
+        for (const note of visibleNotes) {
           const card = document.createElement("article");
           card.className = "note-card";
           const title = document.createElement("div");
@@ -418,7 +447,8 @@
           remove.addEventListener("click", async () => {
             remove.disabled = true;
             try {
-              await notesRef.child(note.id).remove();
+              const ref = note.visibility === "personal" ? personalNotesRef : notesRef;
+              await ref.child(note.id).remove();
               showToast("Note supprimée.");
             } catch (error) {
               remove.disabled = false;
@@ -485,6 +515,7 @@
       document.getElementById("note-form").addEventListener("submit", async event => {
         event.preventDefault();
         const form = event.currentTarget;
+        const visibility = state.noteCompartment;
         const title = document.getElementById("note-title-input");
         const content = document.getElementById("note-content-input");
         const noteTitle = title.value.trim();
@@ -502,15 +533,40 @@
         const button = form.querySelector("button");
         button.disabled = true;
         try {
-          await notesRef.push().set(note);
+          const destination = visibility === "personal" ? personalNotesRef : notesRef;
+          await destination.push().set(note);
           form.reset();
           title.focus();
-          showToast("Note enregistrée.");
+          showToast(visibility === "personal" ? "Note ajoutée au compartiment personnel." : "Note ajoutée au compartiment public.");
         } catch (error) {
           handleDatabaseError(error);
         } finally {
           button.disabled = false;
         }
+      });
+
+      document.querySelectorAll("[data-note-compartment]").forEach(button => {
+        button.addEventListener("click", () => {
+          state.noteCompartment = button.dataset.noteCompartment;
+          document.querySelectorAll("[data-note-compartment]").forEach(tab => {
+            const selected = tab === button;
+            tab.setAttribute("aria-selected", String(selected));
+            tab.tabIndex = selected ? 0 : -1;
+          });
+          const personal = state.noteCompartment === "personal";
+          notesList.setAttribute("aria-labelledby", personal ? "personal-notes-tab" : "shared-notes-tab");
+          document.getElementById("save-note-button").textContent = personal
+            ? "Ajouter une note personnelle"
+            : "Ajouter une note publique";
+          document.getElementById("note-title-input").placeholder = personal
+            ? "Titre de la note personnelle"
+            : "Titre de la note publique";
+          document.getElementById("note-content-input").placeholder = personal
+            ? "Une note visible par toi seul…"
+            : "Une idée ou une information à partager…";
+          updateStats();
+          renderNotes();
+        });
       });
 
       document.querySelectorAll("[data-filter]").forEach(button => {
